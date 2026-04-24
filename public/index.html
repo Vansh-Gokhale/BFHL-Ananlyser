@@ -141,7 +141,25 @@ const BASE_URL = window.location.protocol === 'file:' ? 'http://localhost:3010' 
 async function submit(){
   const raw=document.getElementById('edgeInput').value.trim();
   if(!raw)return;
-  const data=raw.split(/[,\n]+/).map(s=>s.trim()).filter(Boolean);
+
+  let data;
+  try {
+    // If the user pastes a full JSON object e.g. { "data": ["A->B"] }
+    const parsed = JSON.parse(raw);
+    if (parsed && Array.isArray(parsed.data)) {
+      data = parsed.data;
+    } else if (Array.isArray(parsed)) {
+      data = parsed; // in case they just paste an array
+    } else {
+      throw new Error("Not a valid array format");
+    }
+  } catch (err) {
+    // Fallback: parse as comma/newline separated plain text
+    // Replace any stray quotes or brackets if they copy-pasted badly
+    const cleaned = raw.replace(/[\[\]"']/g, '');
+    data = cleaned.split(/[,\n]+/).map(s=>s.trim()).filter(Boolean);
+  }
+
   document.getElementById('loader').classList.add('show');
   document.getElementById('errBanner').classList.remove('show');
   document.getElementById('results').classList.remove('show');
