@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>BFHL Node Analyzer</title>
+<meta name="description" content="Graph hierarchy analyzer with tree construction and cycle detection"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0a0f;--card:#111118;--border:#1e1e2e;--green:#00ff9d;--red:#ff4757;--yellow:#ffbe0b;--orange:#ff8c42;--text:#e0e0e0;--muted:#666680;--font-code:'JetBrains Mono',monospace;--font-head:'Syne',sans-serif}
+body{background:var(--bg);color:var(--text);font-family:var(--font-code);min-height:100vh;overflow-x:hidden}
+canvas#graphBg{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;opacity:.15;pointer-events:none}
+.app{position:relative;z-index:1;max-width:960px;margin:0 auto;padding:2rem 1.5rem 4rem}
+/* Header */
+header{text-align:center;margin-bottom:2.5rem}
+h1{font-family:var(--font-head);font-size:2.4rem;font-weight:800;color:var(--green);position:relative;display:inline-block}
+h1::after{content:'';position:absolute;bottom:-6px;left:0;width:100%;height:3px;background:var(--green);animation:underlinePulse 2s ease-in-out infinite}
+.subtitle{color:var(--muted);font-size:.85rem;margin-top:.8rem}
+@keyframes underlinePulse{0%,100%{opacity:1;transform:scaleX(1)}50%{opacity:.4;transform:scaleX(.6)}}
+/* Input */
+.input-section{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.5rem;margin-bottom:2rem}
+.input-section label{font-size:.85rem;color:var(--muted);display:block;margin-bottom:.5rem}
+textarea{width:100%;height:120px;background:#0d0d14;border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-code);font-size:.9rem;padding:1rem;resize:vertical;transition:border-color .2s}
+textarea:focus{outline:none;border-color:var(--green)}
+.btn-row{display:flex;gap:.8rem;margin-top:1rem}
+.btn{font-family:var(--font-code);font-size:.85rem;padding:.7rem 1.6rem;border:none;border-radius:8px;cursor:pointer;transition:all .2s;font-weight:600}
+.btn-submit{background:var(--green);color:#0a0a0f}
+.btn-submit:hover{box-shadow:0 0 20px rgba(0,255,157,.45);transform:translateY(-1px)}
+.btn-clear{background:transparent;border:1px solid var(--border);color:var(--muted)}
+.btn-clear:hover{border-color:var(--text);color:var(--text)}
+/* Loading */
+.loading{text-align:center;padding:2rem;color:var(--green);display:none;font-size:1rem}
+.loading.show{display:block}
+.loading span{animation:blink 1.2s infinite}
+.loading span:nth-child(2){animation-delay:.2s}
+.loading span:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:0}40%{opacity:1}}
+/* Error */
+.error-banner{background:rgba(255,71,87,.12);border:1px solid var(--red);border-radius:10px;padding:1rem 1.5rem;color:var(--red);margin-bottom:1.5rem;display:none;animation:fadeUp .3s}
+.error-banner.show{display:block}
+/* Results */
+#results{display:none}
+#results.show{display:block}
+/* Cards */
+.section-title{font-family:var(--font-head);font-size:1.2rem;color:var(--green);margin:2rem 0 1rem;font-weight:700}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.4rem;margin-bottom:1rem;animation:fadeUp .4s ease both}
+@keyframes fadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+/* Identity grid */
+.id-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem}
+.id-item label{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+.id-item p{color:var(--green);font-weight:600;margin-top:.25rem;word-break:break-all}
+/* Hierarchy cards */
+.hier-card{border-left:3px solid var(--green)}
+.hier-card.cycle{border-left-color:var(--red)}
+.hier-root{font-family:var(--font-head);font-size:1.5rem;font-weight:800;margin-bottom:.5rem}
+.badge{display:inline-block;font-size:.7rem;padding:.25rem .7rem;border-radius:20px;font-weight:700;margin-right:.5rem;text-transform:uppercase;letter-spacing:.5px}
+.badge-cycle{background:rgba(255,71,87,.15);color:var(--red);border:1px solid var(--red)}
+.badge-depth{background:rgba(0,255,157,.1);color:var(--green);border:1px solid var(--green)}
+.tree-view{margin-top:1rem;font-size:.85rem;line-height:1.7;color:var(--muted);white-space:pre;overflow-x:auto}
+.tree-view span.node{color:var(--green);font-weight:600}
+/* Issues */
+.issues-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+@media(max-width:600px){.issues-row{grid-template-columns:1fr}}
+.pill{display:inline-block;font-size:.75rem;padding:.3rem .7rem;border-radius:20px;margin:.3rem .3rem 0 0;font-weight:600}
+.pill-yellow{background:rgba(255,190,11,.12);color:var(--yellow);border:1px solid var(--yellow)}
+.pill-orange{background:rgba(255,140,66,.12);color:var(--orange);border:1px solid var(--orange)}
+/* Summary */
+.summary-row{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+@media(max-width:600px){.summary-row{grid-template-columns:1fr}}
+.stat-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.2rem;text-align:center;animation:fadeUp .5s ease both}
+.stat-box .num{font-family:var(--font-head);font-size:2rem;font-weight:800;color:var(--green)}
+.stat-box .lbl{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:.3rem}
+</style>
+</head>
+<body>
+<canvas id="graphBg"></canvas>
+<div class="app">
+  <header>
+    <h1>BFHL Node Analyzer</h1>
+    <p class="subtitle">Graph hierarchy builder · Tree &amp; cycle detection</p>
+  </header>
+
+  <section class="input-section">
+    <label for="edgeInput">Enter edges (comma or newline separated)</label>
+    <textarea id="edgeInput" placeholder="A->B, A->C, B->D, C->E, E->F, X->Y, Y->Z, Z->X"></textarea>
+    <div class="btn-row">
+      <button class="btn btn-submit" id="submitBtn" onclick="submit()">▶ Analyze</button>
+      <button class="btn btn-clear" onclick="clearAll()">✕ Clear</button>
+    </div>
+  </section>
+
+  <div class="loading" id="loader">Analyzing<span>·</span><span>·</span><span>·</span></div>
+  <div class="error-banner" id="errBanner"></div>
+
+  <div id="results">
+    <div class="section-title">◈ Identity</div>
+    <div class="card"><div class="id-grid" id="idGrid"></div></div>
+
+    <div class="section-title">◈ Hierarchies</div>
+    <div id="hierContainer"></div>
+
+    <div class="section-title">◈ Issues</div>
+    <div class="issues-row" id="issuesRow"></div>
+
+    <div class="section-title">◈ Summary</div>
+    <div class="summary-row" id="summaryRow"></div>
+  </div>
+</div>
+
+<script>
+const BASE_URL = window.location.protocol === 'file:' ? 'http://localhost:3010' : window.location.origin;
+
+/* ── Animated background graph ─────────────────────────── */
+(function(){
+  const c=document.getElementById('graphBg'),ctx=c.getContext('2d');
+  let W,H,nodes=[];
+  function resize(){W=c.width=innerWidth;H=c.height=innerHeight;init()}
+  function init(){
+    nodes=[];const n=Math.min(60,Math.floor(W*H/15000));
+    for(let i=0;i<n;i++)nodes.push({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-.5)*.4,vy:(Math.random()-.5)*.4,r:2+Math.random()*2});
+  }
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    for(let i=0;i<nodes.length;i++){
+      const a=nodes[i];a.x+=a.vx;a.y+=a.vy;
+      if(a.x<0||a.x>W)a.vx*=-1;if(a.y<0||a.y>H)a.vy*=-1;
+      ctx.beginPath();ctx.arc(a.x,a.y,a.r,0,Math.PI*2);ctx.fillStyle='#00ff9d';ctx.fill();
+      for(let j=i+1;j<nodes.length;j++){
+        const b=nodes[j],d=Math.hypot(a.x-b.x,a.y-b.y);
+        if(d<150){ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.strokeStyle=`rgba(0,255,157,${1-d/150})`;ctx.lineWidth=.6;ctx.stroke();}
+      }
+    }
+    requestAnimationFrame(draw);
+  }
+  addEventListener('resize',resize);resize();draw();
+})();
+
+/* ── API call ──────────────────────────────────────────── */
+async function submit(){
+  const raw=document.getElementById('edgeInput').value.trim();
+  if(!raw)return;
+  const data=raw.split(/[,\n]+/).map(s=>s.trim()).filter(Boolean);
+  document.getElementById('loader').classList.add('show');
+  document.getElementById('errBanner').classList.remove('show');
+  document.getElementById('results').classList.remove('show');
+  try{
+    const r=await fetch(BASE_URL+'/bfhl',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data})});
+    if(!r.ok)throw new Error((await r.json()).error||r.statusText);
+    render(await r.json());
+  }catch(e){
+    const b=document.getElementById('errBanner');b.textContent='⛔ '+e.message;b.classList.add('show');
+  }finally{document.getElementById('loader').classList.remove('show');}
+}
+
+function clearAll(){
+  document.getElementById('edgeInput').value='';
+  document.getElementById('results').classList.remove('show');
+  document.getElementById('errBanner').classList.remove('show');
+}
+
+/* ── Render results ────────────────────────────────────── */
+function render(d){
+  console.log("API Response received:", d);
+
+  // Identity
+  const safeStr = (v) => (v !== undefined && v !== null) ? v : 'N/A';
+  document.getElementById('idGrid').innerHTML=
+    idItem('User Name', safeStr(d.user_id)) +
+    idItem('College Email', safeStr(d.college_email)) +
+    idItem('Personal Email', safeStr(d.personal_email)) +
+    idItem('Roll No.', safeStr(d.college_roll_number));
+
+  // Hierarchies
+  const hc=document.getElementById('hierContainer');hc.innerHTML='';
+  d.hierarchies.forEach((h,i)=>{
+    const div=document.createElement('div');
+    div.className='card hier-card'+(h.has_cycle?' cycle':'');
+    div.style.animationDelay=i*.08+'s';
+    let badges='';
+    if(h.has_cycle)badges+=`<span class="badge badge-cycle">⚠ Cycle Detected</span>`;
+    else badges+=`<span class="badge badge-depth">Depth ${h.depth}</span>`;
+    let treeHTML='';
+    if(!h.has_cycle)treeHTML=`<div class="tree-view">${renderTree(h.tree)}</div>`;
+    div.innerHTML=`<div class="hier-root">${h.root}</div>${badges}${treeHTML}`;
+    hc.appendChild(div);
+  });
+
+  // Issues
+  const ir=document.getElementById('issuesRow');
+  ir.innerHTML=`
+    <div class="card" style="animation-delay:.1s">
+      <div style="color:var(--yellow);font-weight:700;margin-bottom:.5rem;font-size:.8rem">INVALID ENTRIES</div>
+      ${d.invalid_entries.length?d.invalid_entries.map(e=>`<span class="pill pill-yellow">${esc(e)}</span>`).join(''):'<span style="color:var(--muted);font-size:.8rem">None</span>'}
+    </div>
+    <div class="card" style="animation-delay:.15s">
+      <div style="color:var(--orange);font-weight:700;margin-bottom:.5rem;font-size:.8rem">DUPLICATE EDGES</div>
+      ${d.duplicate_edges.length?d.duplicate_edges.map(e=>`<span class="pill pill-orange">${esc(e)}</span>`).join(''):'<span style="color:var(--muted);font-size:.8rem">None</span>'}
+    </div>`;
+
+  // Summary
+  const summary = d.summary || { total_trees: 0, total_cycles: 0, largest_tree_root: 'None' };
+  const sr=document.getElementById('summaryRow');
+  sr.innerHTML=
+    statBox(summary.total_trees, 'Total Trees') +
+    statBox(summary.total_cycles, 'Total Cycles') +
+    statBox(summary.largest_tree_root || '—', 'Largest Tree Root');
+
+  document.getElementById('results').classList.add('show');
+}
+
+function idItem(l,v){return `<div class="id-item"><label>${l}</label><p>${esc(v)}</p></div>`}
+function statBox(n,l){return `<div class="stat-box"><div class="num">${esc(String(n))}</div><div class="lbl">${l}</div></div>`}
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+
+/* ASCII tree renderer */
+function renderTree(obj){
+  let out='';
+  function walk(o,prefix,isLast,isRoot){
+    const keys=Object.keys(o);
+    keys.forEach((k,i)=>{
+      const last=i===keys.length-1;
+      if(isRoot){out+=`<span class="node">${esc(k)}</span>\n`;walk(o[k],'',false,false);}
+      else{out+=prefix+(last?'└── ':'├── ')+`<span class="node">${esc(k)}</span>\n`;walk(o[k],prefix+(last?'    ':'│   '),false,false);}
+    });
+  }
+  walk(obj,'',false,true);
+  return out;
+}
+</script>
+</body>
+</html>
